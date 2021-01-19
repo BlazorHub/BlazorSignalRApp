@@ -1,0 +1,65 @@
+﻿@page "/complex"
+@using BlazorSignalRApp.Shared
+@using Microsoft.AspNetCore.SignalR.Client
+@inject NavigationManager NavigationManager
+@implements IDisposable
+
+<div class="form-group">
+    <label>
+        User:
+        <input @bind="userInput" readonly />
+    </label>
+</div>
+<div class="form-group">
+    <label>
+        Message:
+        <input @bind="messageInput" size="50" />
+    </label>
+</div>
+<button @onclick="Send" disabled="@(!IsConnected)">Send</button>
+
+<hr>
+
+<ul id="messagesList">
+    @foreach (var message in messages)
+    {
+        <li>@message</li>
+    }
+</ul>
+
+@code {
+    private HubConnection hubConnection;
+    private List<string> messages = new List<string>();
+    private string userInput = Guid.NewGuid().ToString();
+    private string messageInput;
+
+    protected override async Task OnInitializedAsync()
+    {
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl(NavigationManager.ToAbsoluteUri("/complexhub"))
+            .Build();
+
+        hubConnection.On<Notification>("ReceiveMessage", (notification) =>
+        {
+            var encodedMsg = $"[{DateTime.Now}] -   {notification.Uid} : {notification.Message}";
+            messages.Add(encodedMsg);
+            StateHasChanged();
+        });
+
+        await hubConnection.StartAsync();
+    }
+
+    Task Send() =>
+        hubConnection.SendAsync("SendMessage", new Notification {
+            Uid = userInput,
+            Message = messageInput
+        });
+
+    public bool IsConnected =>
+        hubConnection.State == HubConnectionState.Connected;
+        
+    public void Dispose()
+    {
+        _ = hubConnection.DisposeAsync();
+    }
+}
